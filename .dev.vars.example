@@ -1,0 +1,14 @@
+# Environment Variables Template
+# Copy this to .dev.vars and fill in your values
+
+# GitHub OAuth App credentials (for local development)
+GITHUB_CLIENT_ID=<your local GitHub OAuth App client ID>
+GITHUB_CLIENT_SECRET=<your local GitHub OAuth App client secret>
+
+# Cookie encryption key - generate with:
+# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+COOKIE_ENCRYPTION_KEY=<generate with the command above>
+
+# Your backend API key (e.g., Perplexity, OpenAI, etc.)
+# This is set via: npx wrangler secret put YOUR_API_KEY_NAME --name <worker-name>
+# See src/index.ts for the exact secret name used
