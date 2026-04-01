@@ -7,10 +7,17 @@ import { GitHubHandler } from "./github-handler";
 // ============================================================
 // CUSTOMIZE: Environment interface
 // Add your API key secrets here (set via `wrangler secret put KEY --name worker-name`)
+// IMPORTANT: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and COOKIE_ENCRYPTION_KEY
+// are also required — they are injected by Cloudflare Workers automatically.
 // ============================================================
-interface Env {
+export interface Env {
   OAUTH_KV: KVNamespace;
   MCP_OBJECT: DurableObjectStub<MyMCP>;
+  // Required secrets — do not remove
+  GITHUB_CLIENT_ID: string;
+  GITHUB_CLIENT_SECRET: string;
+  COOKIE_ENCRYPTION_KEY: string;
+  // CUSTOMIZE: Add your own API keys below
   // MY_API_KEY?: string;
   // ANOTHER_API_KEY?: string;
 }

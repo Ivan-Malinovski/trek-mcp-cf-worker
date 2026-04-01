@@ -14,8 +14,14 @@ import {
   validateCSRFToken,
   validateOAuthState,
 } from "./workers-oauth-utils";
+import type { Env } from "./index";
 
-const app = new Hono<{ Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } }>();
+type HandlerEnv = Env & { OAUTH_PROVIDER: OAuthHelpers };
+
+// cloudflare:workers env does not have typed secrets — cast them
+const cfEnv = env as { COOKIE_ENCRYPTION_KEY: string; GITHUB_CLIENT_ID: string; GITHUB_CLIENT_SECRET: string };
+
+const app = new Hono<{ Bindings: HandlerEnv }>();
 
 // ============================================================
 // AUTHORIZE ENDPOINT
@@ -50,7 +56,7 @@ app.get("/authorize", async (c) => {
   }
 
   // Skip approval if client was previously approved
-  if (await isClientApproved(c.req.raw, actualClientId, env.COOKIE_ENCRYPTION_KEY)) {
+  if (await isClientApproved(c.req.raw, actualClientId, cfEnv.COOKIE_ENCRYPTION_KEY)) {
     const { stateToken } = await createOAuthState(oauthReqInfo, c.env.OAUTH_KV);
     const { setCookie: sessionBindingCookie } = await bindStateToSession(stateToken);
     return redirectToGithub(c.req.raw, stateToken, { "Set-Cookie": sessionBindingCookie });
@@ -129,7 +135,7 @@ async function redirectToGithub(
     headers: {
       ...headers,
       location: getUpstreamAuthorizeUrl({
-        client_id: env.GITHUB_CLIENT_ID,
+        client_id: cfEnv.GITHUB_CLIENT_ID,
         redirect_uri: new URL("/callback", request.url).href,
         scope: "read:user",
         state: stateToken,
