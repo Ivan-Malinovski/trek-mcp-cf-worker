@@ -1,10 +1,10 @@
 # TREK MCP OAuth Proxy
 
-A Cloudflare Worker that provides GitHub OAuth authentication for [TREK](https://github.com/mauriceboe/TREK) MCP (Model Context Protocol), allowing you to use TREK's MCP with Claude mobile app or any OAuth-compatible MCP client.
+A Cloudflare Worker that provides GitHub OAuth authentication for [TREK](https://github.com/mauriceboe/TREK) MCP, allowing you to use TREK with Claude.ai and Claude Desktop.
 
 ## Why This Exists
 
-TREK's MCP server uses bearer token authentication (`Authorization: Bearer trek_xxx`). This works well for Claude Desktop with `mcp-remote`, but the Claude mobile app doesn't support custom headers—it only supports OAuth.
+TREK's MCP server uses bearer token authentication (`Authorization: Bearer trek_xxx`). This works with `mcp-remote` for local Claude Desktop, but **Claude.ai requires OAuth authentication** - it doesn't support static tokens.
 
 This proxy:
 - Authenticates users via GitHub OAuth
@@ -12,12 +12,14 @@ This proxy:
 - Automatically adds your TREK bearer token
 - Restricts access to authorized GitHub usernames
 
+**Important:** This is only a proxy. It contains no MCP implementation - all tools and resources come from your TREK instance.
+
 ## Architecture
 
 ```
-Claude Mobile/App → GitHub OAuth → Cloudflare Worker → TREK MCP Server
-                                              ↓
-                                      (adds bearer token)
+Claude.ai/Claude Desktop → GitHub OAuth → Cloudflare Worker → TREK MCP Server
+                                                      ↓
+                                              (adds bearer token)
 ```
 
 ## Prerequisites
@@ -31,26 +33,14 @@ Claude Mobile/App → GitHub OAuth → Cloudflare Worker → TREK MCP Server
 ### 1. Clone and Install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/trek-mcp-proxy.git
-cd trek-mcp-proxy
+git clone https://github.com/Ivan-Malinovski/trek-mcp-cf-worker.git
+cd trek-mcp-cf-worker
 npm install
 ```
 
-### 2. Create GitHub OAuth Apps
+### 2. Create GitHub OAuth App
 
-You'll need **two** OAuth apps:
-
-#### Development OAuth App
 Go to [github.com/settings/applications/new](https://github.com/settings/applications/new):
-
-| Field | Value |
-|-------|-------|
-| Application name | `TREK MCP (dev)` |
-| Homepage URL | `http://localhost:8788` |
-| Authorization callback URL | `http://localhost:8788/callback` |
-
-#### Production OAuth App
-After deploying, create another app:
 
 | Field | Value |
 |-------|-------|
@@ -58,91 +48,57 @@ After deploying, create another app:
 | Homepage URL | `https://your-worker-name.your-subdomain.workers.dev` |
 | Authorization callback URL | `https://your-worker-name.your-subdomain.workers.dev/callback` |
 
-Save the Client ID and Client Secret for both apps.
+Save the Client ID and Client Secret.
 
-### 3. Configure Local Development
+### 3. Set Allowed Usernames
 
-```bash
-cp .dev.vars.example .dev.vars
-```
-
-Edit `.dev.vars`:
-
-```env
-# GitHub OAuth (development app)
-GITHUB_CLIENT_ID=your_dev_client_id
-GITHUB_CLIENT_SECRET=your_dev_client_secret
-
-# Cookie encryption key (generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))")
-COOKIE_ENCRYPTION_KEY=your_generated_hex_key
-
-# Your TREK bearer token (from TREK Settings → MCP Configuration)
-TREK_API_TOKEN=trek_your_token_here
-```
-
-### 4. Set Allowed Usernames
-
-Edit `src/github-handler.ts` and update the allowlist:
+Edit `src/github-handler.ts`:
 
 ```typescript
 const ALLOWED_USERNAMES = new Set<string>([
   "your-github-username",  // <-- CHANGE THIS
-  "another-username",       // <-- Add more as needed
 ]);
 ```
 
-Only these GitHub users will be able to access your TREK MCP.
+Only these GitHub users can access your TREK MCP.
 
-### 5. Test Locally
-
-```bash
-npm start
-# Server runs at http://localhost:8788
-```
-
-Test with MCP Inspector:
-```bash
-npx @modelcontextprotocol/inspector@latest
-```
-
-Enter `http://localhost:8788/mcp` and complete OAuth flow.
-
-### 6. Deploy to Cloudflare Workers
+### 4. Deploy to Cloudflare Workers
 
 ```bash
 # Create KV namespace for OAuth state
 npx wrangler kv namespace create "OAUTH_KV"
-# Copy the ID from the output
+# Copy the ID output
 
 # Update wrangler.jsonc with the KV namespace ID
 # "id": "your_kv_namespace_id_here"
 
-# Set production secrets
-npx wrangler secret put GITHUB_CLIENT_ID --name trek
-npx wrangler secret put GITHUB_CLIENT_SECRET --name trek
-npx wrangler secret put COOKIE_ENCRYPTION_KEY --name trek
-npx wrangler secret put TREK_API_TOKEN --name trek
+# Set name in wrangler.jsonc (change "trek" to your preferred name)
+# "name": "your-worker-name"
+
+# Set secrets
+npx wrangler secret put GITHUB_CLIENT_ID
+npx wrangler secret put GITHUB_CLIENT_SECRET
+npx wrangler secret put COOKIE_ENCRYPTION_KEY  # Generate: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+npx wrangler secret put TREK_API_TOKEN  # Your TREK bearer token (trek_xxx)
 
 # Deploy
 npm run deploy
 ```
 
-### 7. Connect Claude
-
-**Important:** You must first connect from Claude.ai (web) or Claude Desktop, then it will automatically appear in Claude mobile.
+### 5. Connect Claude
 
 #### Claude.ai (web)
 
 1. Go to Settings → Connectors → Add custom connector
 2. Enter your worker URL: `https://your-worker-name.your-subdomain.workers.dev/mcp`
-3. Complete GitHub OAuth flow
+3. Complete GitHub OAuth
 4. Done! TREK tools are now available
 
-The connector will then appear in Claude mobile app automatically.
+The connector will also appear in Claude mobile app automatically.
 
 #### Claude Desktop
 
-Add to your `claude_desktop_config.json`:
+Add to `claude_desktop_config.json`:
 
 **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
 **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
@@ -161,7 +117,7 @@ Add to your `claude_desktop_config.json`:
 }
 ```
 
-Restart Claude Desktop and complete OAuth flow in browser when prompted.
+Restart Claude Desktop and complete OAuth in browser.
 
 ## Environment Variables
 
@@ -169,64 +125,41 @@ Restart Claude Desktop and complete OAuth flow in browser when prompted.
 |----------|----------|-------------|
 | `GITHUB_CLIENT_ID` | Yes | GitHub OAuth App client ID |
 | `GITHUB_CLIENT_SECRET` | Yes | GitHub OAuth App client secret |
-| `COOKIE_ENCRYPTION_KEY` | Yes | 64-char hex key for cookie encryption |
+| `COOKIE_ENCRYPTION_KEY` | Yes | 64-char hex key for session encryption |
 | `TREK_API_TOKEN` | Yes | Your TREK bearer token (`trek_xxx`) |
 | `TREK_MCP_URL` | No | Override TREK instance URL (default: `https://travel.malinov.ski/mcp`) |
 
 ## Security
 
 - **TREK bearer token** stored as Cloudflare Worker secret, never exposed to clients
-- **GitHub OAuth** handled by `workers-oauth-provider` (OAuth 2.1 + PKCE)
+- **GitHub OAuth** via `workers-oauth-provider` (OAuth 2.1 + PKCE)
 - **Username allowlist** restricts access to authorized users only
 - **Session handling** properly forwards `mcp-session-id` for TREK's session management
-
-## How It Works
-
-1. Client connects and initiates OAuth flow
-2. User authenticates with GitHub
-3. Worker checks if GitHub username is in allowlist
-4. If authorized, Worker proxies all MCP requests to TREK
-5. TREK bearer token is added automatically to each request
-6. Session IDs are forwarded between client and TREK
 
 ## Troubleshooting
 
 ### "Access Denied" after OAuth
 
-Your GitHub username is not in the allowlist. Edit `src/github-handler.ts` and add your username.
+Your GitHub username is not in the allowlist. Update `src/github-handler.ts` and redeploy.
 
 ### "Session limit reached"
 
-TREK has a limit of 5 concurrent MCP sessions. Close other sessions or wait 1 hour for timeout.
+TREK limits concurrent MCP sessions (default: 5). Close other sessions or wait 1 hour for timeout.
 
-### "Missing mcp-session-id header"
+### Tools not appearing
 
-This should be handled automatically by the proxy. Check that you're using the latest deployed version.
-
-### Tools not showing in Claude
-
-1. Complete the OAuth flow in the browser
-2. Restart Claude mobile app
+1. Complete OAuth flow in browser
+2. Restart Claude
 3. Check logs: `npx wrangler tail`
 
-## Development
+## How It Works
 
-```bash
-# Run locally
-npm start
-
-# Type check
-npm run type-check
-
-# View logs
-npx wrangler tail
-```
+1. Client initiates OAuth flow → redirected to GitHub
+2. User authorizes → redirected back to worker
+3. Worker checks if GitHub username is in allowlist
+4. If authorized, all MCP requests proxied to TREK with bearer token
+5. Session IDs forwarded between client and TREK for stateful operations
 
 ## License
 
 MIT
-
-## Credits
-
-- Based on [cloudflare/workers-oauth-provider](https://github.com/cloudflare/workers-oauth-provider)
-- [TREK](https://github.com/mauriceboe/TREK) by mauriceboe
