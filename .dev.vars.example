@@ -1,14 +1,20 @@
 # Environment Variables Template
 # Copy this to .dev.vars and fill in your values
 
-# GitHub OAuth App credentials (for local development)
-GITHUB_CLIENT_ID=<your local GitHub OAuth App client ID>
-GITHUB_CLIENT_SECRET=<your local GitHub OAuth App client secret>
+# GitHub OAuth App - Development
+# Create at: https://github.com/settings/applications/new
+# Homepage URL: http://localhost:8788
+# Callback URL: http://localhost:8788/callback
+GITHUB_CLIENT_ID=your_github_oauth_client_id
+GITHUB_CLIENT_SECRET=your_github_oauth_client_secret
 
-# Cookie encryption key - generate with:
-# node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-COOKIE_ENCRYPTION_KEY=<generate with the command above>
+# Cookie encryption key
+# Generate with: node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+COOKIE_ENCRYPTION_KEY=0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
 
-# Your backend API key (e.g., Perplexity, OpenAI, etc.)
-# This is set via: npx wrangler secret put YOUR_API_KEY_NAME --name <worker-name>
-# See src/index.ts for the exact secret name used
+# Your TREK API token
+# Get this from: Your TREK instance → Settings → MCP Configuration → Create New Token
+TREK_API_TOKEN=trek_your_token_here
+
+# Optional: Override TREK instance URL
+# TREK_MCP_URL=https://your-trek-instance.com/mcp

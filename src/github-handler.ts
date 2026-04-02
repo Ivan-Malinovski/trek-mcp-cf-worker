@@ -18,6 +18,10 @@ import type { Env } from "./index";
 
 type HandlerEnv = Env & { OAUTH_PROVIDER: OAuthHelpers };
 
+const ALLOWED_USERNAMES = new Set<string>([
+  "YOUR_GITHUB_USERNAME", // <-- CHANGE THIS to your GitHub username
+]);
+
 // cloudflare:workers env does not have typed secrets — cast them
 const cfEnv = env as { COOKIE_ENCRYPTION_KEY: string; GITHUB_CLIENT_ID: string; GITHUB_CLIENT_SECRET: string };
 
@@ -72,9 +76,9 @@ app.get("/authorize", async (c) => {
       // ============================================================
       // CUSTOMIZE: Server name and logo shown in approval dialog
       // ============================================================
-      name: "My MCP Server",
-      logo: "https://avatars.githubusercontent.com/u/314135?s=200&v=4",
-      description: "Remote MCP server authenticated via GitHub OAuth.",
+      name: "TREK MCP Proxy",
+      logo: "https://raw.githubusercontent.com/mauriceboe/TREK/main/public/logo.svg",
+      description: "Access your TREK travel planning MCP with GitHub OAuth authentication.",
     },
     setCookie,
     state: { oauthReqInfo },
@@ -182,6 +186,23 @@ app.get("/callback", async (c) => {
   // Get user info from GitHub
   const user = await new Octokit({ auth: accessToken }).rest.users.getAuthenticated();
   const { login, name, email } = user.data;
+
+  // Check allowlist
+  if (!ALLOWED_USERNAMES.has(login)) {
+    return c.html(`
+      <!DOCTYPE html>
+      <html>
+      <head><title>Access Denied</title></head>
+      <body style="font-family: system-ui; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #f5f5f5;">
+        <div style="text-align: center; padding: 40px; background: white; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+          <h1 style="color: #dc3545; margin-bottom: 16px;">Access Denied</h1>
+          <p style="color: #666; margin-bottom: 8px;">Your GitHub username <strong>${login}</strong> is not authorized.</p>
+          <p style="color: #999; font-size: 14px;">Contact the administrator to request access.</p>
+        </div>
+      </body>
+      </html>
+    `, 403);
+  }
 
   // Complete the OAuth authorization
   const { redirectTo } = await c.env.OAUTH_PROVIDER.completeAuthorization({

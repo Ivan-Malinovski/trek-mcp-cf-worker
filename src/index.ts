@@ -1,106 +1,80 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { McpAgent } from "agents/mcp";
-import { z } from "zod";
 import { GitHubHandler } from "./github-handler";
 
-// ============================================================
-// CUSTOMIZE: Environment interface
-// Add your API key secrets here (set via `wrangler secret put KEY --name worker-name`)
-// IMPORTANT: GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, and COOKIE_ENCRYPTION_KEY
-// are also required — they are injected by Cloudflare Workers automatically.
-// ============================================================
 export interface Env {
   OAUTH_KV: KVNamespace;
-  MCP_OBJECT: DurableObjectStub<MyMCP>;
-  // Required secrets — do not remove
   GITHUB_CLIENT_ID: string;
   GITHUB_CLIENT_SECRET: string;
   COOKIE_ENCRYPTION_KEY: string;
-  // CUSTOMIZE: Add your own API keys below
-  // MY_API_KEY?: string;
-  // ANOTHER_API_KEY?: string;
+  TREK_API_TOKEN: string;
+  TREK_MCP_URL?: string; // Optional: override TREK instance URL
 }
 
-// Props from GitHub OAuth (available in all tool calls)
-type Props = {
-  login: string;
-  name: string;
-  email: string;
-  accessToken: string;
-};
+// Default TREK MCP endpoint (can be overridden via TREK_MCP_URL env var)
+const DEFAULT_TREK_MCP_URL = "https://travel.malinov.ski/mcp";
 
-// ============================================================
-// CUSTOMIZE: Allowed usernames
-// Only these GitHub users can access the tools
-// ============================================================
-const ALLOWED_USERNAMES = new Set<string>([
-  "your-github-username", // <-- CHANGE THIS
-]);
-
-// ============================================================
-// MCP SERVER + TOOLS
-// Add your tools in the init() method below
-// ============================================================
-export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
-  server = new McpServer({
-    name: "My MCP Server",
-    version: "1.0.0",
+async function proxyToTrek(request: Request, trekToken: string, trekUrl: string): Promise<Response> {
+  const headers = new Headers();
+  headers.set("Authorization", `Bearer ${trekToken}`);
+  
+  for (const [key, value] of request.headers) {
+    const lowerKey = key.toLowerCase();
+    if (lowerKey !== "authorization" && 
+        lowerKey !== "host" &&
+        lowerKey !== "content-length" &&
+        lowerKey !== "cookie") {
+      headers.set(key, value);
+    }
+  }
+  
+  let body: string | undefined;
+  if (request.method === "POST" || request.method === "PUT") {
+    body = await request.text();
+  }
+  
+  const proxyRequest = new Request(trekUrl, {
+    method: request.method,
+    headers,
+    body,
   });
+  
+  const response = await fetch(proxyRequest);
+  
+  const responseHeaders = new Headers(response.headers);
+  responseHeaders.delete("content-encoding");
+  
+  return new Response(response.body, {
+    status: response.status,
+    headers: responseHeaders,
+  });
+}
 
-  async init() {
-    // --------------------------------------------------------
-    // EXAMPLE TOOL: my_tool
-    // Replace this with your own tools
-    // --------------------------------------------------------
-    this.server.tool(
-      "my_tool",
-      "A brief description of what this tool does",
-      {
-        query: z.string().describe("The input parameter description"),
-      },
-      async (args) => {
-        // Check allowlist
-        if (!ALLOWED_USERNAMES.has(this.props!.login)) {
-          return {
-            content: [{ text: "Access denied. Your GitHub username is not authorized.", type: "text" }],
-            isError: true,
-          };
-        }
-
-        // Call your API
-        // const response = await fetch("https://api.example.com", {
-        //   method: "POST",
-        //   headers: {
-        //     Authorization: `Bearer ${this.env.MY_API_KEY}`,
-        //     "Content-Type": "application/json",
-        //   },
-        //   body: JSON.stringify(args),
-        // });
-
-        // Example response
-        return {
-          content: [{ text: JSON.stringify({ query: args.query, result: "example" }), type: "text" }],
-          structuredContent: { query: args.query, result: "example" },
-        };
-      },
-    );
-
-    // --------------------------------------------------------
-    // ADD MORE TOOLS HERE
-    // --------------------------------------------------------
+class TrekMCPAPIHandler {
+  private env: Env;
+  
+  constructor(env: Env) {
+    this.env = env;
+  }
+  
+  async fetch(request: Request): Promise<Response> {
+    const trekUrl = this.env.TREK_MCP_URL || DEFAULT_TREK_MCP_URL;
+    return proxyToTrek(request, this.env.TREK_API_TOKEN, trekUrl);
   }
 }
 
-// ============================================================
-// OAUTH PROVIDER SETUP
-// Handles GitHub OAuth automatically
-// ============================================================
-export default new OAuthProvider({
-  apiHandler: MyMCP.serve("/mcp"),
-  apiRoute: "/mcp",
-  authorizeEndpoint: "/authorize",
-  clientRegistrationEndpoint: "/register",
-  defaultHandler: GitHubHandler as any,
-  tokenEndpoint: "/token",
-});
+export default {
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const apiHandler = new TrekMCPAPIHandler(env);
+    
+    const oauthProvider = new OAuthProvider({
+      apiHandler: apiHandler as any,
+      apiRoute: "/mcp",
+      authorizeEndpoint: "/authorize",
+      clientRegistrationEndpoint: "/register",
+      defaultHandler: GitHubHandler as any,
+      tokenEndpoint: "/token",
+    });
+    
+    return oauthProvider.fetch(request, env, ctx);
+  }
+};

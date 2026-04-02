@@ -1,8 +1,8 @@
 {
-  "name": "cloudflare-remote-mcp-template",
+  "name": "trek-mcp-proxy",
   "version": "0.0.1",
   "private": true,
-  "description": "Template for building authenticated remote MCP servers on Cloudflare Workers with GitHub OAuth",
+  "description": "Cloudflare Worker proxy for TREK MCP with GitHub OAuth authentication",
   "scripts": {
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
