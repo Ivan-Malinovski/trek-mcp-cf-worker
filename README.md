@@ -91,33 +91,19 @@ npm run deploy
 
 1. Go to Settings → Connectors → Add custom connector
 2. Enter your worker URL: `https://your-worker-name.your-subdomain.workers.dev/mcp`
-3. Complete GitHub OAuth
-4. Done! TREK tools are now available
+3. Leave the OAuth fields empty
+4. Complete GitHub OAuth
+5. Done! TREK tools are now available
 
 The connector will also appear in Claude mobile app automatically.
 
 #### Claude Desktop
 
-Add to `claude_desktop_config.json`:
+Same as Claude.ai
 
-**Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
-**macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "trek": {
-      "url": "https://your-worker-name.your-subdomain.workers.dev/mcp",
-      "auth": {
-        "type": "oauth",
-        "clientId": "trek-desktop"
-      }
-    }
-  }
-}
-```
-
-Restart Claude Desktop and complete OAuth in browser.
+#### Mobile
+You have to go through the setup process on Claude.ai or Claude Desktop.
+Afterward it will be available on mobile.
 
 ## Environment Variables
 
